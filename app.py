@@ -15,6 +15,9 @@ MAX_FILE_MB = 5
 MAX_QUESTIONS = 15   # per visitor session
 DAILY_LIMIT = 150    # all visitors together, protects the free API quota
 
+GENERAL_NOTE = ('General-knowledge answer, not from your documents. '
+                'It may be outdated or wrong, so verify important facts.')
+
 st.set_page_config(
     page_title='NoteGenie | AI Study Assistant',
     page_icon='📘',
@@ -191,7 +194,6 @@ def stream_answer(messages):
         yield 'The model returned an empty answer. Please try again or rephrase the question.'
 
 
-
 def show_sources(sources):
     with st.expander('Sources'):
         for s in sources:
@@ -233,6 +235,9 @@ with st.sidebar:
     st.markdown(f"**Indexed documents:** {len(st.session_state.files)}")
     st.markdown(f"**Indexed chunks:** {len(st.session_state.texts)}")
     st.toggle('Answer from my documents', key='use_documents')
+    if not st.session_state.use_documents:
+        st.caption('General mode: answers come from the AI model memory and may be '
+                   'outdated or wrong, especially for current events.')
 
     st.divider()
     st.markdown('### 🎓 Study Tools')
@@ -300,6 +305,8 @@ if not st.session_state.messages and not pending:
 for message in st.session_state.messages:
     with st.chat_message(message['role']):
         st.markdown(message['content'])
+        if message.get('general'):
+            st.caption(GENERAL_NOTE)
         if message.get('sources'):
             show_sources(message['sources'])
 
@@ -323,9 +330,13 @@ if pending:
             + [{'role': 'user', 'content': pending['prompt']}]
         )
 
+        is_general = (not pending['sources']) and pending['use_history']
+
         with st.chat_message('assistant'):
             try:
                 answer = st.write_stream(stream_answer(chat_messages))
+                if is_general:
+                    st.caption(GENERAL_NOTE)
                 if pending['sources']:
                     show_sources(pending['sources'])
             except Exception as error:
@@ -334,4 +345,5 @@ if pending:
                 st.error(answer)
 
         st.session_state.messages.append(
-            {'role': 'assistant', 'content': answer, 'sources': pending['sources']})
+            {'role': 'assistant', 'content': answer,
+             'sources': pending['sources'], 'general': is_general})
